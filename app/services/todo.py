@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from app.repositories.todo_db import PostgresTodoRepository
-from app.schemas.todo import TodoCreate, TodoRead, TodoUpdate
-from app.services.base import BaseService
+from repositories.todo_db import PostgresTodoRepository
+from schemas.todo import TodoCreate, TodoRead, TodoUpdate
+from services.base import BaseService
 
 
 class TodoService(BaseService):

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from dependency_injector.wiring import Provide, inject
 
-from app.containers.container import Container
-from app.schemas.todo import TodoCreate, TodoRead, TodoUpdate
-from app.services.todo import TodoService
+from containers.container import Container
+from schemas.todo import TodoCreate, TodoRead, TodoUpdate
+from services.todo import TodoService
 
 router = APIRouter(prefix="/todos", tags=["todos"])
 

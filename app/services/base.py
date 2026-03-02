@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC
 
-from app.repositories.base import BaseRepository
+from repositories.base import BaseRepository
 
 
 class BaseService(ABC):

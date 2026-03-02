@@ -1,12 +1,12 @@
 from dependency_injector import containers, providers
 
-from app.db import SessionLocal, engine
-from app.repositories.todo_db import PostgresTodoRepository
-from app.services.todo import TodoService
+from db import SessionLocal, engine
+from repositories.todo_db import PostgresTodoRepository
+from services.todo import TodoService
 
 
 class Container(containers.DeclarativeContainer):
-    wiring_config = containers.WiringConfiguration(packages=["app.api.routes"])
+    wiring_config = containers.WiringConfiguration(packages=["api.routes"])
 
     db_engine = providers.Object(engine)
     session_factory = providers.Object(SessionLocal)

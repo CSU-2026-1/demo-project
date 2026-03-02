@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from sqlalchemy.orm import sessionmaker
 
-from app.models.todo import Todo
-from app.repositories.base import BaseRepository
-from app.schemas.todo import TodoCreate, TodoRead, TodoUpdate
+from models.todo import Todo
+from repositories.base import BaseRepository
+from schemas.todo import TodoCreate, TodoRead, TodoUpdate
 
 
 class PostgresTodoRepository(BaseRepository[Todo, TodoRead, TodoCreate, TodoUpdate]):
