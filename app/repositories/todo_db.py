@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from models.todo import Todo
 from repositories.base import BaseRepository
@@ -11,5 +11,5 @@ class PostgresTodoRepository(BaseRepository[Todo, TodoRead, TodoCreate, TodoUpda
     model_cls = Todo
     read_schema = TodoRead
 
-    def __init__(self, session_factory: sessionmaker) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         super().__init__(session_factory)
