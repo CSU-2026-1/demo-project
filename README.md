@@ -1,25 +1,38 @@
-# Todo Clean Architecture Demo
+# Todo Clean Architecture Demo (Citus)
 
-Минимальный пример FastAPI-проекта с `dependency_injector`, разделенный на слои:
+Проект переведен на Citus:
+- шардирование делает `create_distributed_table('todos', 'id')`;
+- репликация шардов задается параметром `citus.shard_replication_factor`.
 
-- API (`app/api`) — только HTTP-ручки.
-- Сервисы (`app/services`) — бизнес-логика.
-- Репозитории (`app/repositories`) — работа с данными (сейчас InMemory).
-- Контейнер (`app/containers`) — настройка DI.
+## Запуск
 
-## Установка и запуск
-
-### Docker Compose
 ```bash
+docker compose down -v
 docker compose up --build
 ```
-API будет на http://localhost:8000, Postgres на порту 5432.
 
-Переменные окружения лежат в `.env` (локальный, игнорируется git), пример — `.env.example`.
+API: `http://localhost:8888`  
+Citus coordinator: `localhost:5432`
 
-## Маршруты
-- `POST /todos/` — создать задачу.
-- `GET /todos/` — список.
-- `GET /todos/{id}` — получить по id.
-- `PUT /todos/{id}` — обновить частично/полностью.
-- `DELETE /todos/{id}` — удалить.
+## Что теперь делает приложение
+
+- подключается только к coordinator (`DATABASE_URL`);
+- при старте:
+1. создает таблицы SQLAlchemy;
+2. регистрирует worker-узлы в Citus (`citus_add_node`);
+3. выставляет `citus.shard_count` и `citus.shard_replication_factor`;
+4. делает таблицу `todos` distributed.
+
+## Переменные окружения
+
+Смотри [.env.example](/C:/Users/ivane/todo-project/.env.example).
+
+Ключевые:
+- `DATABASE_URL`
+- `CITUS_INTER_NODE_PASSWORD`
+- `CITUS_WORKER_NODES`
+- `CITUS_SHARD_COUNT`
+- `CITUS_SHARD_REPLICATION_FACTOR`
+
+`CITUS_INTER_NODE_PASSWORD` нужен для подключений coordinator -> worker.
+Если не задан, используется `POSTGRES_PASSWORD`.

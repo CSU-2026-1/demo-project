@@ -4,7 +4,7 @@ from fastapi import FastAPI
 
 from api import api_router
 from containers.container import Container
-from db import Base, engine
+from db import Base, engine, init_citus_for_todos_table
 
 container = Container()
 container.wire(packages=["api.routes"])
@@ -14,6 +14,7 @@ container.wire(packages=["api.routes"])
 async def lifespan(_: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await init_citus_for_todos_table()
     try:
         yield
     finally:

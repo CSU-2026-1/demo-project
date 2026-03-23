@@ -1,12 +1,58 @@
-version: "3.9"
-
 services:
-  db:
-    image: postgres:15-alpine
-    env_file:
-      - .env
+  citus-coordinator:
+    image: citusdata/citus:13.2
+    container_name: citus-coordinator
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - citus_coordinator_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - todo-network
+
+  citus-worker-1:
+    image: citusdata/citus:13.2
+    container_name: citus-worker-1
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - citus_worker1_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - todo-network
+
+  citus-worker-2:
+    image: citusdata/citus:13.2
+    container_name: citus-worker-2
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5434:5432"
+    volumes:
+      - citus_worker2_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - todo-network
 
@@ -17,7 +63,12 @@ services:
     volumes:
       - ./app:/app
     depends_on:
-      - db
+      citus-coordinator:
+        condition: service_healthy
+      citus-worker-1:
+        condition: service_healthy
+      citus-worker-2:
+        condition: service_healthy
     ports:
       - "8888:8000"
     networks:
@@ -28,4 +79,6 @@ networks:
     driver: bridge
 
 volumes:
-  db_data:
+  citus_coordinator_data:
+  citus_worker1_data:
+  citus_worker2_data:
