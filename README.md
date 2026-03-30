@@ -1,38 +1,55 @@
-# Todo Clean Architecture Demo (Citus)
+# Todo API + LLM Worker (RabbitMQ)
 
-Проект переведен на Citus:
-- шардирование делает `create_distributed_table('todos', 'id')`;
-- репликация шардов задается параметром `citus.shard_replication_factor`.
+This project now consists of two microservices:
 
-## Запуск
+- `api`: FastAPI service for CRUD on todos.
+- `worker`: background service that receives created todos from RabbitMQ, calls the LLM, and stores generated implementation steps in DB.
+
+## Service layout
+
+- `api` service:
+  - source: `./app`
+  - image build: root `./Dockerfile`
+  - dependencies: root `./requirements.txt`
+- `worker` service:
+  - source: `./worker`
+  - image build: `./worker/Dockerfile`
+  - dependencies: `./worker/requirements.txt`
+
+Infrastructure:
+
+- PostgreSQL + Citus cluster (`citus-coordinator`, `citus-worker-1`, `citus-worker-2`)
+- RabbitMQ (`rabbitmq`)
+
+## Run
 
 ```bash
 docker compose down -v
 docker compose up --build
 ```
 
-API: `http://localhost:8888`  
-Citus coordinator: `localhost:5432`
+Endpoints:
 
-## Что теперь делает приложение
+- API: `http://localhost:8888`
+- RabbitMQ UI: `http://localhost:15672` (credentials from `.env`)
 
-- подключается только к coordinator (`DATABASE_URL`);
-- при старте:
-1. создает таблицы SQLAlchemy;
-2. регистрирует worker-узлы в Citus (`citus_add_node`);
-3. выставляет `citus.shard_count` и `citus.shard_replication_factor`;
-4. делает таблицу `todos` distributed.
+## Message flow
 
-## Переменные окружения
+1. API creates todo in `todos`.
+2. API publishes message to queue `TODO_QUEUE_NAME` with payload:
+   - `todo_id`
+   - `title`
+3. Worker consumes the message, calls LLM, and writes steps to `todo_steps`.
+4. API `GET /todos` and `GET /todos/{id}` now return `steps` for each todo.
 
-Смотри [.env.example](/C:/Users/ivane/todo-project/.env.example).
+## Environment variables
 
-Ключевые:
-- `DATABASE_URL`
-- `CITUS_INTER_NODE_PASSWORD`
-- `CITUS_WORKER_NODES`
-- `CITUS_SHARD_COUNT`
-- `CITUS_SHARD_REPLICATION_FACTOR`
+See `.env.example`.
 
-`CITUS_INTER_NODE_PASSWORD` нужен для подключений coordinator -> worker.
-Если не задан, используется `POSTGRES_PASSWORD`.
+Important variables:
+
+- `RABBITMQ_URL`
+- `TODO_QUEUE_NAME`
+- `YANDEX_CLOUD_API_KEY`
+- `YANDEX_CLOUD_FOLDER`
+- `OPENAI_PROMPT_ID`

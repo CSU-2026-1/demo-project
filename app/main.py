@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 
@@ -6,18 +7,28 @@ from api import api_router
 from containers.container import Container
 from db import Base, engine, init_citus_for_todos_table
 
+logger = logging.getLogger(__name__)
+
 container = Container()
 container.wire(packages=["api.routes"])
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    publisher = container.rabbitmq_publisher()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     await init_citus_for_todos_table()
     try:
+        await publisher.connect()
+    except Exception:
+        logger.exception("RabbitMQ is not available on startup, will retry on publish")
+
+    try:
         yield
     finally:
+        await publisher.close()
         await engine.dispose()
 
 

@@ -1,3 +1,3 @@
-from models.todo import Todo
+from models.todo import Todo, TodoStep
 
-__all__ = ["Todo"]
+__all__ = ["Todo", "TodoStep"]

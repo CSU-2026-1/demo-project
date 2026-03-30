@@ -22,7 +22,16 @@ class TodoUpdate(BaseModel):
     done: Optional[bool] = None
 
 
+class TodoStepRead(BaseModel):
+    id: int
+    description: str
+    completed: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TodoRead(TodoBase):
     id: int
+    steps: list[TodoStepRead] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)

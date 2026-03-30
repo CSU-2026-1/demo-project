@@ -1,4 +1,23 @@
 services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-todo}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-todo}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - todo-network
+
   citus-coordinator:
     image: citusdata/citus:13.2
     container_name: citus-coordinator
@@ -69,8 +88,28 @@ services:
         condition: service_healthy
       citus-worker-2:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "8888:8000"
+    networks:
+      - todo-network
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    depends_on:
+      citus-coordinator:
+        condition: service_healthy
+      citus-worker-1:
+        condition: service_healthy
+      citus-worker-2:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks:
       - todo-network
 
@@ -79,6 +118,7 @@ networks:
     driver: bridge
 
 volumes:
+  rabbitmq_data:
   citus_coordinator_data:
   citus_worker1_data:
   citus_worker2_data:
