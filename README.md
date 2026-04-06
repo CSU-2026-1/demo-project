@@ -20,6 +20,7 @@ Infrastructure:
 
 - PostgreSQL + Citus cluster (`citus-coordinator`, `citus-worker-1`, `citus-worker-2`)
 - RabbitMQ (`rabbitmq`)
+- Redis (`redis`) for API caching
 
 ## Run
 
@@ -40,7 +41,8 @@ Endpoints:
    - `todo_id`
    - `title`
 3. Worker consumes the message, calls LLM, and writes steps to `todo_steps`.
-4. API `GET /todos` and `GET /todos/{id}` now return `steps` for each todo.
+4. Worker invalidates Redis cache for this todo.
+5. API `GET /todos` and `GET /todos/{id}` returns cached data when available and refreshes cache on DB read.
 
 ## Environment variables
 
@@ -49,7 +51,10 @@ See `.env.example`.
 Important variables:
 
 - `RABBITMQ_URL`
+- `REDIS_URL`
 - `TODO_QUEUE_NAME`
+- `TODO_CACHE_TTL_SECONDS`
+- `TODO_CACHE_KEY_PREFIX`
 - `YANDEX_CLOUD_API_KEY`
 - `YANDEX_CLOUD_FOLDER`
 - `OPENAI_PROMPT_ID`

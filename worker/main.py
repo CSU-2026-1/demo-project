@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 import aio_pika
+import redis.asyncio as redis
 from aio_pika.abc import AbstractIncomingMessage
 from openai import AsyncOpenAI
 from sqlalchemy import func, select
@@ -21,6 +22,8 @@ RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://todo:todo@rabbitmq:5672/")
 TODO_QUEUE_NAME = os.getenv("TODO_QUEUE_NAME", "todo.generate.steps")
 WORKER_RETRY_DELAY_SECONDS = int(os.getenv("WORKER_RETRY_DELAY_SECONDS", "5"))
 OPENAI_PROMPT_ID = os.getenv("OPENAI_PROMPT_ID", "fvtit6j69998ovg5jdnv")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+TODO_CACHE_KEY_PREFIX = os.getenv("TODO_CACHE_KEY_PREFIX", "todo")
 
 YANDEX_CLOUD_API_KEY = os.getenv("YANDEX_CLOUD_API_KEY")
 YANDEX_CLOUD_FOLDER = os.getenv("YANDEX_CLOUD_FOLDER")
@@ -35,17 +38,33 @@ client_kwargs: dict[str, Any] = {
 if YANDEX_CLOUD_FOLDER:
     client_kwargs["project"] = YANDEX_CLOUD_FOLDER
 client = AsyncOpenAI(**client_kwargs)
+redis_client = redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+
+
+def _todo_cache_key(todo_id: int) -> str:
+    return f"{TODO_CACHE_KEY_PREFIX}:todo:{todo_id}"
+
+
+def _todos_cache_key() -> str:
+    return f"{TODO_CACHE_KEY_PREFIX}:todos:list"
+
+
+async def invalidate_todo_cache(todo_id: int) -> None:
+    try:
+        await redis_client.delete(_todo_cache_key(todo_id), _todos_cache_key())
+    except Exception:
+        logger.exception("Failed to invalidate cache for todo %s", todo_id)
 
 
 async def llm_generate_steps(title: str) -> list[str]:
     logger.info("Calling LLM for title: %s", title)
     try:
-        # Текст промта хранится на стороне модели (Prompt ID).
-        # "Разбей цель пользователя на 3-7 конкретных шагов и верни
-        # строго JSON-объект вида {"steps":["...","..."]} без лишнего текста."
+        # Prompt text is stored in the model platform by Prompt ID.
+        # For students: split a goal into 3-7 practical steps and return
+        # strict JSON object {"steps":[...]} with no extra text.
         response = await client.responses.create(
             prompt={"id": OPENAI_PROMPT_ID},
-            input=f"Цель: {title}",
+            input=f"Goal: {title}",
         )
         content = (response.output_text or "").strip()
         if not content:
@@ -96,6 +115,7 @@ async def process_message(todo_id: int, title: str) -> None:
             )
 
         await db.commit()
+        await invalidate_todo_cache(todo_id)
         logger.info("Saved %d steps for todo %s", len(steps_texts), todo_id)
 
 
@@ -142,5 +162,12 @@ async def consume_forever() -> None:
             await asyncio.sleep(WORKER_RETRY_DELAY_SECONDS)
 
 
+async def _main() -> None:
+    try:
+        await consume_forever()
+    finally:
+        await redis_client.aclose()
+
+
 if __name__ == "__main__":
-    asyncio.run(consume_forever())
+    asyncio.run(_main())

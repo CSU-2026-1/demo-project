@@ -1,5 +1,6 @@
 from dependency_injector import containers, providers
 
+from cache.redis_cache import TodoCache
 from db import SessionLocal, engine
 from messaging.rabbitmq import TodoEventPublisher
 from repositories.todo_db import PostgresTodoRepository
@@ -12,10 +13,12 @@ class Container(containers.DeclarativeContainer):
     db_engine = providers.Object(engine)
     session_factory = providers.Object(SessionLocal)
 
+    redis_cache = providers.Singleton(TodoCache)
     rabbitmq_publisher = providers.Singleton(TodoEventPublisher)
     todo_repository = providers.Factory(PostgresTodoRepository, session_factory=session_factory)
     todo_service = providers.Factory(
         TodoService,
         repository=todo_repository,
         publisher=rabbitmq_publisher,
+        cache=redis_cache,
     )

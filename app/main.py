@@ -16,6 +16,7 @@ container.wire(packages=["api.routes"])
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     publisher = container.rabbitmq_publisher()
+    cache = container.redis_cache()
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -24,10 +25,15 @@ async def lifespan(_: FastAPI):
         await publisher.connect()
     except Exception:
         logger.exception("RabbitMQ is not available on startup, will retry on publish")
+    try:
+        await cache.connect()
+    except Exception:
+        logger.exception("Redis is not available on startup, cache will be bypassed")
 
     try:
         yield
     finally:
+        await cache.close()
         await publisher.close()
         await engine.dispose()
 
