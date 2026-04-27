@@ -5,7 +5,7 @@ from fastapi import FastAPI
 
 from api import api_router
 from containers.container import Container
-from db import Base, engine, init_citus_for_todos_table
+from db import Base, engine, init_citus_for_todos_table, init_users_table
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ async def lifespan(_: FastAPI):
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await init_users_table()
     await init_citus_for_todos_table()
     try:
         await publisher.connect()

@@ -52,6 +52,13 @@ SessionLocal = async_sessionmaker(
 Base = declarative_base()
 
 
+async def init_users_table() -> None:
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(30) NOT NULL DEFAULT 'user'")
+        )
+
+
 async def init_citus_for_todos_table() -> None:
     # Базовая валидация параметров кластера, чтобы не стартовать с некорректной конфигурацией.
     if CITUS_SHARD_COUNT < 1:

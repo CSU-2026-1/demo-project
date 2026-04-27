@@ -3,9 +3,14 @@ from dependency_injector.wiring import Provide, inject
 
 from containers.container import Container
 from schemas.todo import TodoCreate, TodoRead, TodoUpdate
+from security import get_current_user, require_role
 from services.todo import TodoService
 
-router = APIRouter(prefix="/todos", tags=["todos"])
+router = APIRouter(
+    prefix="/todos",
+    tags=["todos"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.post("/", response_model=TodoRead, status_code=status.HTTP_201_CREATED)
@@ -42,6 +47,7 @@ async def get_todo(
 async def update_todo(
     todo_id: int,
     payload: TodoUpdate,
+    _admin=Depends(require_role("admin")),
     service: TodoService = Depends(Provide[Container.todo_service]),
 ) -> TodoRead:
     try:
@@ -54,6 +60,7 @@ async def update_todo(
 @inject
 async def delete_todo(
     todo_id: int,
+    _admin=Depends(require_role("admin")),
     service: TodoService = Depends(Provide[Container.todo_service]),
 ) -> None:
     try:

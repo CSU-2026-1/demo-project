@@ -4,6 +4,8 @@ from cache.redis_cache import TodoCache
 from db import SessionLocal, engine
 from messaging.rabbitmq import TodoEventPublisher
 from repositories.todo_db import PostgresTodoRepository
+from repositories.user_db import PostgresUserRepository
+from services.auth import AuthService
 from services.todo import TodoService
 
 
@@ -15,6 +17,8 @@ class Container(containers.DeclarativeContainer):
 
     redis_cache = providers.Singleton(TodoCache)
     rabbitmq_publisher = providers.Singleton(TodoEventPublisher)
+    user_repository = providers.Factory(PostgresUserRepository, session_factory=session_factory)
+    auth_service = providers.Factory(AuthService, repository=user_repository)
     todo_repository = providers.Factory(PostgresTodoRepository, session_factory=session_factory)
     todo_service = providers.Factory(
         TodoService,

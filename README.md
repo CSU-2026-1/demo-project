@@ -33,6 +33,32 @@ Endpoints:
 
 - API: `http://localhost:8888`
 - RabbitMQ UI: `http://localhost:15672` (credentials from `.env`)
+- Swagger UI: `http://localhost:8888/docs`
+
+## Auth
+
+The API has local JWT authentication for classroom demos:
+
+1. Register a user with `POST /auth/register`:
+
+```json
+{
+  "username": "student",
+  "password": "student-password"
+}
+```
+
+2. Get a token with `POST /auth/token` using form fields `username` and `password`.
+3. Send the token as `Authorization: Bearer <token>` when calling `/todos`.
+
+In Swagger UI, use the `Authorize` button after requesting `/auth/token`.
+
+Users registered with `POST /auth/register` get role `user`. For RBAC demos,
+`POST /auth/register-admin` creates an `admin` user. Only `admin` can call
+`DELETE /todos/{id}`; regular users receive `403 Forbidden`.
+
+Tokens use `JWT_SECRET_KEY`, `JWT_ALGORITHM=HS256`, and
+`JWT_ACCESS_TOKEN_EXPIRE_MINUTES`.
 
 ## Message flow
 
@@ -55,6 +81,8 @@ Important variables:
 - `TODO_QUEUE_NAME`
 - `TODO_CACHE_TTL_SECONDS`
 - `TODO_CACHE_KEY_PREFIX`
+- `JWT_SECRET_KEY`
+- `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`
 - `YANDEX_CLOUD_API_KEY`
 - `YANDEX_CLOUD_FOLDER`
 - `OPENAI_PROMPT_ID`
