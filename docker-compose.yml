@@ -92,6 +92,8 @@ services:
 
   api:
     build: .
+    deploy:
+      replicas: 2
     env_file:
       - .env
     volumes:
@@ -107,8 +109,87 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - todo-network
+
+  load-balancer:
+    image: nginx:1.30-alpine
+    container_name: todo-load-balancer
+    depends_on:
+      - api
+    environment:
+      TZ: ${LOG_TZ:-UTC}
     ports:
-      - "8888:8000"
+      - "8888:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/logs:/var/log/nginx
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/docs || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - todo-network
+
+  fail2ban:
+    image: crazymax/fail2ban:1.1.0
+    container_name: todo-fail2ban
+    depends_on:
+      - load-balancer
+    network_mode: "service:load-balancer"
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      TZ: ${LOG_TZ:-UTC}
+      F2B_LOG_LEVEL: INFO
+    volumes:
+      - ./fail2ban:/data
+      - ./nginx/logs:/var/log/nginx:ro
+    restart: unless-stopped
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.4.0
+    container_name: todo-nginx-exporter
+    depends_on:
+      - load-balancer
+    command:
+      - --nginx.scrape-uri=http://load-balancer/nginx_status
+    ports:
+      - "9113:9113"
+    networks:
+      - todo-network
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: todo-prometheus
+    depends_on:
+      - nginx-exporter
+      - api
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - todo-network
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: todo-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - todo-network
 
@@ -142,3 +223,5 @@ volumes:
   citus_coordinator_data:
   citus_worker1_data:
   citus_worker2_data:
+  prometheus_data:
+  grafana_data:

@@ -1,0 +1,14 @@
+[nginx-limit-req]
+enabled = true
+filter = nginx-limit-req
+logpath = /var/log/nginx/error.log
+backend = polling
+
+# Если один IP регулярно упирается в лимиты Nginx, временно блокируем его.
+findtime = 60
+maxretry = 5
+bantime = 300
+
+# Контейнер fail2ban использует сетевое пространство load-balancer,
+# поэтому iptables-правила применяются там, где Nginx принимает трафик.
+action = iptables-allports[name=nginx-limit-req]

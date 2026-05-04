@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from api import api_router
 from containers.container import Container
 from db import Base, engine, init_citus_for_todos_table, init_users_table
+from metrics import setup_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Todo Clean Architecture Demo", lifespan=lifespan)
 app.container = container  # type: ignore[attr-defined]
+setup_metrics(app)
 app.include_router(api_router)
 
 
