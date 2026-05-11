@@ -1,0 +1,17 @@
+apiVersion: 1
+
+templates:
+  - orgId: 1
+    name: todo-telegram-template
+    template: |
+      {{ define "todo.telegram.message" }}
+      {{ if eq .Status "firing" }}ALERT{{ else }}RESOLVED{{ end }}: {{ .CommonLabels.alertname }}
+      Severity: {{ .CommonLabels.severity }}
+      Service: {{ .CommonLabels.service }}
+
+      {{ range .Alerts }}
+      Summary: {{ .Annotations.summary }}
+      Description: {{ .Annotations.description }}
+      {{ if .GeneratorURL }}Grafana: {{ .GeneratorURL }}{{ end }}
+      {{ end }}
+      {{ end }}

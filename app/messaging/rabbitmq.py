@@ -5,6 +5,8 @@ import logging
 import os
 
 import aio_pika
+import elasticapm
+from tracing import capture_span, set_custom_context, set_labels
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +22,12 @@ class TodoEventPublisher:
         if self._connection and not self._connection.is_closed:
             return
 
-        self._connection = await aio_pika.connect_robust(self.amqp_url)
-        self._channel = await self._connection.channel()
-        await self._channel.declare_queue(self.queue_name, durable=True)
+        set_labels(messaging_queue=self.queue_name)
+        with capture_span("rabbitmq.connect", "messaging"):
+            self._connection = await aio_pika.connect_robust(self.amqp_url)
+            self._channel = await self._connection.channel()
+        with capture_span("rabbitmq.declare_queue", "messaging"):
+            await self._channel.declare_queue(self.queue_name, durable=True)
         logger.info("RabbitMQ publisher connected to queue '%s'", self.queue_name)
 
     async def close(self) -> None:
@@ -39,12 +44,34 @@ class TodoEventPublisher:
             ensure_ascii=False,
         ).encode("utf-8")
 
+        message_headers = {}
+        traceparent = elasticapm.get_trace_parent_header()
+        if traceparent:
+            message_headers["traceparent"] = traceparent
+
+        set_labels(
+            messaging_queue=self.queue_name,
+            messaging_payload_bytes=len(message_body),
+            todo_id=todo_id,
+        )
+        set_custom_context(
+            {
+                "messaging": {
+                    "queue": self.queue_name,
+                    "event": "todo.created",
+                    "traceparent_propagated": bool(traceparent),
+                }
+            }
+        )
+
         message = aio_pika.Message(
             body=message_body,
             content_type="application/json",
             delivery_mode=aio_pika.DeliveryMode.PERSISTENT,
+            headers=message_headers,
         )
 
         assert self._channel is not None
-        await self._channel.default_exchange.publish(message, routing_key=self.queue_name)
+        with capture_span("rabbitmq.publish todo.created", "messaging"):
+            await self._channel.default_exchange.publish(message, routing_key=self.queue_name)
         logger.info("Published todo event: todo_id=%s", todo_id)

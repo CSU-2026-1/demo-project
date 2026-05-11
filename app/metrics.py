@@ -32,22 +32,24 @@ def setup_metrics(app: FastAPI) -> None:
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         start = time.perf_counter()
-        response = await call_next(request)
-        path = _route_path(request)
-
-        REQUESTS_TOTAL.labels(
-            instance=INSTANCE,
-            method=request.method,
-            path=path,
-            status=str(response.status_code),
-        ).inc()
-        REQUEST_DURATION_SECONDS.labels(
-            instance=INSTANCE,
-            method=request.method,
-            path=path,
-        ).observe(time.perf_counter() - start)
-
-        return response
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        finally:
+            path = _route_path(request)
+            REQUESTS_TOTAL.labels(
+                instance=INSTANCE,
+                method=request.method,
+                path=path,
+                status=str(status_code),
+            ).inc()
+            REQUEST_DURATION_SECONDS.labels(
+                instance=INSTANCE,
+                method=request.method,
+                path=path,
+            ).observe(time.perf_counter() - start)
 
     @app.get("/metrics", include_in_schema=False)
     async def metrics() -> Response:

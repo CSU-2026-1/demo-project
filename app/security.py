@@ -13,20 +13,24 @@ from config import (
     JWT_SECRET_KEY,
 )
 from schemas.auth import AuthenticatedUser
+from tracing import capture_span, set_labels
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    with capture_span("security.bcrypt.hash", "app"):
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    with capture_span("security.bcrypt.verify", "app"):
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
 
 
 def create_access_token(subject: str, username: str | None = None, role: str = "user") -> str:
     now = datetime.now(UTC)
+    set_labels(jwt_role=role, jwt_subject=subject)
     payload = {
         "sub": subject,
         "iat": now,
@@ -40,11 +44,12 @@ def create_access_token(subject: str, username: str | None = None, role: str = "
 
 def decode_access_token(token: str) -> dict:
     try:
-        return jwt.decode(
-            token,
-            JWT_SECRET_KEY,
-            algorithms=[JWT_ALGORITHM],
-        )
+        with capture_span("security.jwt.decode", "app"):
+            return jwt.decode(
+                token,
+                JWT_SECRET_KEY,
+                algorithms=[JWT_ALGORITHM],
+            )
     except jwt.InvalidTokenError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -71,11 +76,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> Authenticated
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return AuthenticatedUser(
+    user = AuthenticatedUser(
         subject=str(subject),
         username=payload.get("preferred_username") or payload.get("username"),
         role=role,
     )
+    set_labels(user_subject=user.subject, user_role=user.role, authenticated=True)
+    return user
 
 
 def require_role(required_role: str):

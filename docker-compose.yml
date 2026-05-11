@@ -96,6 +96,12 @@ services:
       replicas: 2
     env_file:
       - .env
+    environment:
+      ELASTIC_APM_SERVICE_NAME: todo-api
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-http://apm-server:8200}
+      ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-local}
+      ELASTIC_APM_SECRET_TOKEN: ${ELASTIC_APM_SECRET_TOKEN:-}
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: ${ELASTIC_APM_TRANSACTION_SAMPLE_RATE:-1.0}
     volumes:
       - ./app:/app
     depends_on:
@@ -186,10 +192,74 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ALERT_TELEGRAM_BOT_TOKEN: ${GF_ALERT_TELEGRAM_BOT_TOKEN:-change-me}
+      GF_ALERT_TELEGRAM_CHAT_ID: ${GF_ALERT_TELEGRAM_CHAT_ID:-telegram-chat-id-not-set}
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - todo-network
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: todo-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=5s || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    networks:
+      - todo-network
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: todo-kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY:-local-dev-kibana-alerting-encryption-key-32chars}
+    ports:
+      - "5601:5601"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5601/api/status || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    networks:
+      - todo-network
+
+  apm-server:
+    image: docker.elastic.co/apm/apm-server:8.15.3
+    container_name: todo-apm-server
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      kibana:
+        condition: service_healthy
+    command:
+      - apm-server
+      - -e
+      - -E
+      - apm-server.host=0.0.0.0:8200
+      - -E
+      - output.elasticsearch.hosts=["http://elasticsearch:9200"]
+      - -E
+      - setup.kibana.host=kibana:5601
+      - -E
+      - apm-server.auth.anonymous.enabled=true
+    ports:
+      - "8200:8200"
     networks:
       - todo-network
 
@@ -199,6 +269,12 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    environment:
+      ELASTIC_APM_SERVICE_NAME: todo-worker
+      ELASTIC_APM_SERVER_URL: ${ELASTIC_APM_SERVER_URL:-http://apm-server:8200}
+      ELASTIC_APM_ENVIRONMENT: ${ELASTIC_APM_ENVIRONMENT:-local}
+      ELASTIC_APM_SECRET_TOKEN: ${ELASTIC_APM_SECRET_TOKEN:-}
+      ELASTIC_APM_TRANSACTION_SAMPLE_RATE: ${ELASTIC_APM_TRANSACTION_SAMPLE_RATE:-1.0}
     depends_on:
       citus-coordinator:
         condition: service_healthy
@@ -225,3 +301,4 @@ volumes:
   citus_worker2_data:
   prometheus_data:
   grafana_data:
+  elasticsearch_data:

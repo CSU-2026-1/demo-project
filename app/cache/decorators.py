@@ -4,6 +4,7 @@ from functools import wraps
 from typing import Any, Awaitable, Callable, TypeVar
 
 from schemas.todo import TodoRead
+from tracing import capture_span, set_labels
 
 F = TypeVar("F", bound=Callable[..., Awaitable[Any]])
 
@@ -17,12 +18,17 @@ def cache_todo_get() -> Callable[[F], F]:
                 todo_id_raw = args[0]
             todo_id = int(todo_id_raw)
 
-            cached = await self.cache.get_todo(todo_id)
+            set_labels(cache_scope="todo", todo_id=todo_id)
+            with capture_span("cache.todo.get", "cache"):
+                cached = await self.cache.get_todo(todo_id)
             if cached is not None:
+                set_labels(cache_hit=True)
                 return cached
 
+            set_labels(cache_hit=False)
             todo = await func(self, *args, **kwargs)
-            await self.cache.set_todo(todo)
+            with capture_span("cache.todo.set", "cache"):
+                await self.cache.set_todo(todo)
             return todo
 
         return wrapper  # type: ignore[return-value]
@@ -34,12 +40,17 @@ def cache_todos_list() -> Callable[[F], F]:
     def decorator(func: F) -> F:
         @wraps(func)
         async def wrapper(self: Any, *args: Any, **kwargs: Any) -> list[TodoRead]:
-            cached = await self.cache.get_todos()
+            set_labels(cache_scope="todos")
+            with capture_span("cache.todos.get", "cache"):
+                cached = await self.cache.get_todos()
             if cached is not None:
+                set_labels(cache_hit=True, cached_todo_count=len(cached))
                 return cached
 
+            set_labels(cache_hit=False)
             todos = await func(self, *args, **kwargs)
-            await self.cache.set_todos(todos)
+            with capture_span("cache.todos.set", "cache"):
+                await self.cache.set_todos(todos)
             return todos
 
         return wrapper  # type: ignore[return-value]
@@ -56,7 +67,9 @@ def invalidate_todo_cache(
             result = await func(self, *args, **kwargs)
             todo_id = todo_id_resolver(args, kwargs, result)
             if todo_id is not None:
-                await self.cache.invalidate_all(int(todo_id))
+                set_labels(cache_invalidate=True, todo_id=int(todo_id))
+                with capture_span("cache.todo.invalidate_all", "cache"):
+                    await self.cache.invalidate_all(int(todo_id))
             return result
 
         return wrapper  # type: ignore[return-value]

@@ -27,6 +27,8 @@ Infrastructure:
 - Prometheus (`prometheus`) and Nginx exporter (`nginx-exporter`) for load
   balancing metrics
 - Grafana (`grafana`) for dashboard visualization
+- Elasticsearch (`elasticsearch`), Kibana (`kibana`), and Elastic APM Server
+  (`apm-server`) for distributed tracing
 
 ## Run
 
@@ -49,6 +51,8 @@ Endpoints:
 - Swagger UI: `http://localhost:8888/docs`
 - Prometheus UI: `http://localhost:9090`
 - Grafana UI: `http://localhost:3000` (`admin` / `admin` by default)
+- Kibana UI: `http://localhost:5601`
+- Elastic APM intake: `http://localhost:8200`
 - Nginx exporter metrics: `http://localhost:9113/metrics`
 
 The API container is no longer published directly on the host. Inside the Docker
@@ -95,6 +99,28 @@ Useful demo queries:
 
 For the balancing demo, generate traffic through `http://localhost:8888`, then
 open Prometheus and compare the `instance` labels for `api-replicas`.
+
+## Distributed tracing with ELK
+
+Tracing is configured through Elastic APM:
+
+- `todo-api` uses the Elastic APM Starlette/FastAPI middleware.
+- `todo-worker` creates APM transactions for RabbitMQ message processing and
+  spans for Redis invalidation and LLM calls.
+- `apm-server` receives trace data and writes it to Elasticsearch.
+- Kibana displays traces under **Observability -> APM**.
+
+Relevant environment variables are listed in `.env.example`:
+
+- `ELASTIC_APM_SERVER_URL=http://apm-server:8200`
+- `ELASTIC_APM_ENVIRONMENT=local`
+- `ELASTIC_APM_SECRET_TOKEN=`
+- `ELASTIC_APM_TRANSACTION_SAMPLE_RATE=1.0`
+
+To see traces, start the stack, call the API through `http://localhost:8888`,
+create a todo, then open `http://localhost:5601` and go to
+**Observability -> APM -> Services**. You should see `todo-api` after HTTP
+requests and `todo-worker` after a todo message is consumed.
 
 ## Auth
 
